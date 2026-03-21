@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
+import Sudoku from './Sudoku';
+import Word from './Word';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -24,25 +27,39 @@ function App() {
   }, []);
 
   return (
+    <BrowserRouter> {/* 2. 전체를 감싸는 울타리 */}
     <div className="App">
       <header className="App-header">
         <h1>🚀 안녕 지민아 이제 공부하자 !!!</h1>
         <p>클라우드타입 API + 네온 DB 실시간 연결</p>
         
-        {loading ? (
-          <p>데이터 로딩 중...</p>
-        ) : (
-          <div className="message-list">
-            {messages.map((msg) => (
-              <div key={msg.id} className="message-item">
-                <span className="date">[{new Date(msg.created_at).toLocaleDateString()}]</span>
-                <span className="content">{msg.content}</span>
+        <div style={{marginBottom: '20px'}}>
+          <Link to="/" style={{color: '#61dafb', marginRight: '15px', textDecoration: 'none'}}>홈</Link>
+          <Link to="/Sudoku" style={{color: '#61dafb', marginRight: '15px', textDecoration: 'none'}}>스도쿠</Link>
+          <Link to="/Word" style={{color: '#61dafb', textDecoration: 'none'}}>영단어</Link>
+        </div>
+        
+        <Routes>
+          <Route path="/" element={
+            loading ? (
+              <p>데이터 로딩 중...</p>
+            ) : (
+              <div className="message-list">
+                {messages.map((msg, index) => (
+                  <div key={index} className="message-item">
+                    <span className="date">[{new Date(msg.now).toLocaleDateString()}]</span>
+                    <span className="content">{JSON.stringify(msg)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )
+          } />
+          <Route path="/Sudoku" element={<Sudoku />} />
+          <Route path="/Word" element={<Word />} />
+        </Routes>
       </header>
     </div>
+    </BrowserRouter>
   );
 }
 
