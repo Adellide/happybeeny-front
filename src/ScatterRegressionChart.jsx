@@ -46,6 +46,14 @@ export default function ScatterRegressionChart({ data }) {
     const { slope, intercept, lineData } = calculateLinearRegression(data);
     const formulaText = `y = ${slope.toFixed(2)}x ${intercept >= 0 ? "+" : "-"} ${Math.abs(intercept).toFixed(2)}`;
 
+    // 사선을 그리기 위한 최소/최대 좌표 계산
+    const xValues = data.map(d => d[0]);
+    const yValues = data.map(d => d[1]);
+    const minX = Math.min(...xValues);
+    const maxX = Math.max(...xValues);
+    const minY = Math.min(...yValues);
+    const maxY = Math.max(...yValues);
+
     // ECharts 옵션 설정
     const option = {
       title: {
@@ -98,7 +106,32 @@ export default function ScatterRegressionChart({ data }) {
           type: "scatter",
           data: data,
           itemStyle: { color: "#3b82f6", opacity: 0.7 },
-          symbolSize: 8
+          symbolSize: 8,
+          markLine: {
+            data: [
+              // 1. 기존: Y축 평균선
+              { 
+                type: "average", 
+                valueIndex: 1, 
+                name: "Y축 평균",
+                lineStyle: { type: "dashed", color: "#f59e0b", width: 2 },
+                label: { formatter: '평균: {c}', position: 'insideEndTop' }
+              },
+              // 2. 추가: 좌상단(minX, maxY)에서 우하단(maxX, minY)으로 그어지는 사선
+              [
+                { 
+                  coord: [minX, maxY], 
+                  name: '사선 시작점',
+                  lineStyle: { type: "solid", color: "#10b981", width: 2 } // 초록색 실선
+                },
+                { 
+                  coord: [maxX, minY], 
+                  name: '사선 끝점',
+                  label: { formatter: '좌상→우하', position: 'insideEndBottom', color: '#10b981' }
+                }
+              ]
+            ]
+          }
         },
         {
           name: "추세선(Regression)",
