@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import ReactECharts from "echarts-for-react";
+import * as XLSX from "xlsx";
 import { generateScatterData, generateResidualData, calcRegression, SERIES_OPTIONS } from "../utils/chartUtils";
 import DetailGrid from "./DetailGrid";
 
@@ -7,9 +8,59 @@ import DetailGrid from "./DetailGrid";
 // 1. 메인 산점도 차트 컴포넌트 (MainScatterChart)
 // =========================================================================
 function MainScatterChart({ data, viewMode = "default", xLabel = "날짜", yLabel = "판매량" }) {
-  const option = useMemo(() => {
+  // 컨텍스트 메뉴 좌표 상태
+  const [menuPos, setMenuPos] = useState(null);
+  const chartRef = useRef(null);
 
-const groupedData = [{name:'정상', data: [[6.72,70.56],[2.28,91.1],[6.96,48.41]]}, {name:'EMPXJ-이상', data: [[3.44,80.24],[5.68,65.32]]}];
+  // useMemo 밖으로 빼서 엑셀 내보내기 함수에서도 데이터에 접근할 수 있도록 분리
+  const groupedData = useMemo(() => [
+    {name:'정상', data: [[6.72,70.56],[2.28,91.1],[6.96,48.41]]}, 
+    {name:'EMPXJ-이상', data: [[3.44,80.24],[5.68,65.32]]}
+  ], []);
+
+  // 엑셀(CSV) 다운로드 로직
+  const exportToExcel = useCallback(() => {
+    // 1. 데이터를 엑셀 시트용 배열 객체로 변환
+    const excelData = [];
+    groupedData.forEach((group) => {
+      group.data.forEach((point) => {
+        excelData.push({ Group: group.name, X: point[0], Y: point[1] });
+      });
+    });
+
+    // 2. 워크시트 및 워크북 생성 후 다운로드
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "ScatterData");
+    XLSX.writeFile(workbook, "scatter_data.xlsx");
+
+    setMenuPos(null); // 다운로드 후 메뉴 닫기
+  }, [groupedData]);
+
+  // 이미지(PNG) 다운로드 로직
+  const exportToImage = useCallback(() => {
+    if (chartRef.current) {
+      const echartInstance = chartRef.current.getEchartsInstance();
+      const url = echartInstance.getDataURL({
+        type: "png",
+        backgroundColor: "#1a1e2a" // 투명 배경 방지용 차트 배경색 지정
+      });
+      const link = document.createElement("a");
+      link.download = "scatter_chart.png";
+      link.href = url;
+      link.click();
+    }
+    setMenuPos(null);
+  }, []);
+
+  // 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = () => setMenuPos(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  const option = useMemo(() => {
     const series = groupedData.map((group) => ({
       name: group.name,
       type: "scatter",
@@ -130,12 +181,55 @@ const groupedData = [{name:'정상', data: [[6.72,70.56],[2.28,91.1],[6.96,48.41
   }, [data, viewMode, xLabel, yLabel]);
 
   return (
-    <div className="chart-cell chart-main">
+    <div 
+      className="chart-cell chart-main" 
+      onContextMenu={(e) => {
+        e.preventDefault(); // 브라우저 기본 우클릭 메뉴 방지
+        setMenuPos({ x: e.clientX, y: e.clientY });
+      }}
+    >
       <div className="chart-label">판매량 분석 산점도</div>
       {option ? (
-        <ReactECharts option={option} className="chart-canvas" style={{ height: "100%", width: "100%" }} notMerge={true} />
+        <ReactECharts ref={chartRef} option={option} className="chart-canvas" style={{ height: "100%", width: "100%" }} notMerge={true} />
       ) : (
         <div className="chart-canvas" />
+      )}
+
+      {menuPos && (
+        <div
+          style={{
+            position: "fixed",
+            top: menuPos.y,
+            left: menuPos.x,
+            backgroundColor: "#252a38",
+            color: "#e8eaf0",
+            padding: "6px 0",
+            borderRadius: "6px",
+            fontSize: "12px",
+            cursor: "pointer",
+            fontFamily: "Space Mono",
+            display: "flex",
+            flexDirection: "column",
+            minWidth: "160px"
+          }}
+          onClick={exportToExcel}
+        >
+          <div 
+            style={{ padding: "10px 16px", cursor: "pointer", borderBottom: "1px solid #1a1e2a" }}
+            onClick={exportToExcel}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#3b82f6"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+          >엑셀다운로드
+          </div>
+          <div 
+            style={{ padding: "10px 16px", cursor: "pointer" }}
+            onClick={exportToImage}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#3b82f6"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            이미지(PNG) 저장 🖼️
+          </div>
+        </div>
       )}
     </div>
   );

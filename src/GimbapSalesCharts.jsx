@@ -3,7 +3,7 @@ import * as echarts from "echarts";
 
 // ─── 1. 샘플 데이터 생성기 ──────────────────────────────
 const GIMBAP_TYPES = ["참치김밥", "치즈김밥", "야채김밥", "돈까스김밥"];
-const DATES = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
+const DATES = ["2025-10-01T15:00:00", "2025-10-02T14:00:00", "2025-10-03T16:00:00", "2025-10-04T15:30:00", "2025-10-05T15:00:00", "2025-10-06T15:10:00", "2025-10-07T15:40:00", "2025-10-08T15:20:00"];
 
 const generateSampleData = () => {
   const data = [];
@@ -48,45 +48,45 @@ const calculateBoxplotValues = (values) => {
 };
 
 // ─── 3. 선형 회귀(Linear Regression) 및 R² 계산 헬퍼 함수 ──
-const calculateRegressionAndR2 = (dataPoints, categories) => {
+const calculateRegressionAndR2 = (dataPoints) => {
   const n = dataPoints.length;
   if (n === 0) return null;
 
+  const numericData = dataPoints
+    .map(([date, value]) => {
+      const time = new Date(date).getTime();
+      return { time, value, date };
+    })
+    .filter((d) => !Number.isNaN(d.time));
+
+  if (numericData.length === 0) return null;
+
   let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-  
-  // ECharts category(문자열) 기반이므로 X축을 0, 1, 2... 인덱스로 매핑하여 계산합니다.
-  const numericData = dataPoints.map((dp) => {
-    const xIdx = categories.indexOf(dp[0]);
-    return [xIdx, dp[1]];
+  numericData.forEach(({ time, value }) => {
+    sumX += time;
+    sumY += value;
+    sumXY += time * value;
+    sumX2 += time * time;
   });
 
-  numericData.forEach(([x, y]) => {
-    sumX += x;
-    sumY += y;
-    sumXY += x * y;
-    sumX2 += x * x;
-  });
-
-  // 기울기(slope)와 y절편(intercept) 계산
   const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
   const intercept = (sumY - slope * sumX) / n;
 
-  // R² (결정계수) 계산
   const yMean = sumY / n;
   let ssTot = 0;
   let ssRes = 0;
-  numericData.forEach(([x, y]) => {
-    ssTot += Math.pow(y - yMean, 2);
-    const predicted = slope * x + intercept;
-    ssRes += Math.pow(y - predicted, 2);
+  numericData.forEach(({ time, value }) => {
+    ssTot += Math.pow(value - yMean, 2);
+    const predicted = slope * time + intercept;
+    ssRes += Math.pow(value - predicted, 2);
   });
   const rSquared = ssTot === 0 ? 1 : 1 - (ssRes / ssTot);
 
-  // 차트에 그릴 추세선의 시작과 끝 좌표 (category 이름 매핑)
-  const startX = categories[0];
-  const endX = categories[categories.length - 1];
-  const startY = slope * 0 + intercept;
-  const endY = slope * (categories.length - 1) + intercept;
+  const sortedByTime = [...numericData].sort((a, b) => a.time - b.time);
+  const startX = sortedByTime[0].date;
+  const endX = sortedByTime[sortedByTime.length - 1].date;
+  const startY = slope * sortedByTime[0].time + intercept;
+  const endY = slope * sortedByTime[sortedByTime.length - 1].time + intercept;
 
   return { slope, intercept, rSquared, startX, endX, startY, endY };
 };
@@ -153,10 +153,15 @@ export default function GimbapSalesCharts() {
       // 우측 R² 라벨이 안 짤리도록 여백(right)을 10%로 확장
       grid: { left: "5%", right: "10%", bottom: "10%", top: "25%", containLabel: true },
       xAxis: {
-        type: "category",
-        name: "판매 날짜",
-        data: DATES,
-        boundaryGap: true,
+        type: "time",
+        name: "판매 일자",
+        axisLabel: {
+          formatter: (value) => {
+            const date = new Date(value);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+          },
+        },
+        boundaryGap: false,
       },
       yAxis: {
         type: "value",
