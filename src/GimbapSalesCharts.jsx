@@ -172,6 +172,28 @@ export default function GimbapSalesCharts() {
 
     chart.setOption(option);
 
+     let isProgrammatic = false;
+    chart.on("legendselectchanged", (params) => {
+      if (isProgrammatic) return; // 이벤트 무한 루프 방지
+      isProgrammatic = true;
+
+      const selectedMap = params.selected;
+      const clicked = params.name;
+      const selectedCount = Object.values(selectedMap).filter(Boolean).length;
+
+      if (selectedCount === 0) {
+        // 유일하게 켜져 있던 항목을 클릭하여 화면에 아무것도 안 남게 된 경우 -> 전체 선택으로 복구
+        Object.keys(selectedMap).forEach((key) => {
+          chart.dispatchAction({ type: "legendSelect", name: key });
+        });
+      } else {
+        // 그 외의 경우 -> 방금 클릭한 항목만 켜고, 나머지는 모두 끔
+        Object.keys(selectedMap).forEach((key) => {
+          chart.dispatchAction({ type: key === clicked ? "legendSelect" : "legendUnSelect", name: key });
+        });
+      }
+      isProgrammatic = false;
+    });
     const resizeObserver = new ResizeObserver(() => chart.resize());
     resizeObserver.observe(scatterRef.current);
 
@@ -281,8 +303,38 @@ export default function GimbapSalesCharts() {
     };
   }, [salesData]);
 
+    const downloadExcel = () => {
+    // 1. CSV 헤더 작성
+    let csvContent = "날짜,김밥 종류,판매량\n";
+    
+    // 2. CSV 데이터 행 추가
+    salesData.forEach((row) => {
+      csvContent += `${row.date},${row.type},${row.amount}\n`;
+    });
+
+    // 3. 한글 깨짐 방지를 위한 BOM(Byte Order Mark) 추가
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+    
+    // 4. 다운로드 링크 생성 및 클릭 이벤트 발생
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "김밥_판매량_데이터.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%", height: "800px", padding: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%", height: "800px", padding: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button 
+          onClick={downloadExcel}
+          style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
+        >
+          엑셀(CSV) 다운로드
+        </button>
+      </div>
       <div ref={scatterRef} style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: "12px", padding: "16px", background: "#fff" }} />
       <div ref={boxplotRef} style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: "12px", padding: "16px", background: "#fff" }} />
     </div>
