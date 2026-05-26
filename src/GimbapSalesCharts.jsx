@@ -171,7 +171,7 @@ export default function GimbapSalesCharts() {
     };
 
     chart.setOption(option);
-
+/*
      let isProgrammatic = false;
     chart.on("legendselectchanged", (params) => {
       if (isProgrammatic) return; // 이벤트 무한 루프 방지
@@ -194,6 +194,31 @@ export default function GimbapSalesCharts() {
       }
       isProgrammatic = false;
     });
+    */
+
+    chart.on("legendselectchanged", (params) => {
+  const { selected, name: clicked } = params;
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
+  const newSelected = {};
+
+  if (selectedCount === 0) {
+    // 전체 복구
+    Object.keys(selected).forEach((key) => {
+      newSelected[key] = true;
+    });
+  } else {
+    // 클릭한 항목만 true, 나머지 false
+    Object.keys(selected).forEach((key) => {
+      newSelected[key] = key === clicked;
+    });
+  }
+
+  // dispatchAction 대신 setOption으로 한 번에 적용
+  chart.setOption({
+    legend: { selected: newSelected },
+  });
+});
     const resizeObserver = new ResizeObserver(() => chart.resize());
     resizeObserver.observe(scatterRef.current);
 
@@ -324,6 +349,49 @@ export default function GimbapSalesCharts() {
     link.click();
     document.body.removeChild(link);
   };
+
+const downloadExcel = (chartData) => {
+  const worksheet = XLSX.utils.json_to_sheet(chartData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+  // ❌ 기존 방식 - 데이터 크면 내부에서 Blob 사용
+  // XLSX.writeFile(workbook, "chart_data.xlsx");
+
+  // ✅ Base64로 직접 변환 후 다운로드
+  const base64 = XLSX.write(workbook, { bookType: "xlsx", type: "base64" });
+  
+  const a = document.createElement("a");
+  a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+  a.download = "chart_data.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+const downloadExcel = (chartData) => {
+  const worksheet = XLSX.utils.json_to_sheet(chartData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+  // Uint8Array로 변환 후 Blob 직접 생성 (더 안정적)
+  const buf = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  // Blob URL 대신 FileReader로 Base64 변환
+  const reader = new FileReader();
+  reader.onload = () => {
+    const a = document.createElement("a");
+    a.href = reader.result;
+    a.download = "chart_data.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  reader.readAsDataURL(blob);
+};
 
   return (
       <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%", height: "800px", padding: "16px" }}>
