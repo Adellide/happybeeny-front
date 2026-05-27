@@ -196,6 +196,40 @@ export default function GimbapSalesCharts() {
     });
     */
 
+    let isProgrammatic = false;
+
+chart.on("legendselectchanged", (params) => {
+  if (isProgrammatic) return;
+
+  const { selected, name: clicked } = params;
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
+  isProgrammatic = true;
+
+  const actions = [];
+
+  if (selectedCount === 0) {
+    Object.keys(selected).forEach((key) => {
+      actions.push({ type: "legendSelect", name: key });
+    });
+  } else {
+    Object.keys(selected).forEach((key) => {
+      actions.push({
+        type: key === clicked ? "legendSelect" : "legendUnSelect",
+        name: key,
+      });
+    });
+  }
+
+  // 모든 dispatch를 동일 태스크 안에서 완료한 뒤 플래그 해제
+  actions.forEach((action) => chart.dispatchAction(action));
+
+  // 밀린 이벤트가 모두 소화된 후 플래그 해제
+  setTimeout(() => {
+    isProgrammatic = false;
+  }, 0);
+});
+
     chart.on("legendselectchanged", (params) => {
   const { selected, name: clicked } = params;
   const selectedCount = Object.values(selected).filter(Boolean).length;
@@ -393,6 +427,90 @@ const downloadExcel = (chartData) => {
   reader.readAsDataURL(blob);
 };
 
+
+///// 여기부터 확인해봐
+
+const activeSetRef = useRef(new Set());
+
+ chart.on("legendselectchanged", (params) => {
+    const { selected, name: clicked } = params;
+    const allKeys = Object.keys(selected);
+    const activeSet = activeSetRef.current;
+
+    if (activeSet.size === 0) {
+      activeSet.add(clicked);
+    } else if (activeSet.has(clicked)) {
+      if (activeSet.size === 1) {
+        activeSet.clear(); // 전체 초기화
+      } else {
+        activeSet.delete(clicked);
+      }
+    } else {
+      activeSet.add(clicked);
+    }
+
+    const newSelected = {};
+    allKeys.forEach((key) => {
+      newSelected[key] = activeSet.size === 0 ? true : activeSet.has(key);
+    });
+
+    chart.setOption({ legend: { selected: newSelected } });
+  });
+
+  const downloadExcel = (sheetsData) => {
+  // sheetsData 예시:
+  // [
+  //   { sheetName: "매출현황", data: [...] },
+  //   { sheetName: "비용현황", data: [...] },
+  //   { sheetName: "순이익",   data: [...] },
+  // ]
+
+  const workbook = XLSX.utils.book_new();
+
+  sheetsData.forEach(({ sheetName, data }) => {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  });
+
+  const buf = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const a = document.createElement("a");
+    a.href = reader.result;
+    a.download = "chart_data.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  reader.readAsDataURL(blob);
+};
+downloadExcel([
+  {
+    sheetName: "매출현황",
+    data: [
+      { 날짜: "2024-01", 매출: 1000 },
+      { 날짜: "2024-02", 매출: 1200 },
+    ],
+  },
+  {
+    sheetName: "비용현황",
+    data: [
+      { 날짜: "2024-01", 비용: 800 },
+      { 날짜: "2024-02", 비용: 900 },
+    ],
+  },
+  {
+    sheetName: "순이익",
+    data: [
+      { 날짜: "2024-01", 순이익: 200 },
+      { 날짜: "2024-02", 순이익: 300 },
+    ],
+  },
+]);
   return (
       <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%", height: "800px", padding: "16px" }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
