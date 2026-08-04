@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect, useRef } from "react";
+import React, { useMemo, useCallback, useEffect, useRef, useState } from "react";
 import { Card, Button, Space, message } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -11,16 +11,25 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 /**
  * Mock API 함수
  */
-const fetchGridData = async () => {
-  // 실제 API URL로 교체하세요.
-  // const { data } = await axios.get("/api/grid-data");
-  // 아래는 목업 데이터입니다.
-  await new Promise((resolve) => setTimeout(resolve, 500)); // 로딩 시뮬레이션
-  return [
-    {  name: "John Doe", role: "Admin", use: true ,delYn: false,isDirty : false ,saveFlag:''},
-    { name: "Jane Smith", role: "User", use: true ,delYn: false,isDirty : false ,saveFlag:''},
-    { name: "Peter Jones", role: "Guest", use: true ,delYn: false,isDirty : false ,saveFlag:''},
+const fetchGridData = async ({ queryKey }) => {
+  const [_, searchParams] = queryKey;
+  // 실제 API 요청 시 다음과 같이 param 전달:
+  // const { data } = await axios.get("/api/grid-data", { params: searchParams });
+  console.log("Fetching data with search params:", searchParams);
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const allData = [
+    { name: "John Doe", role: "Admin", use: "Y", delYn: "N", isDirty: false, saveFlag: '' },
+    { name: "Jane Smith", role: "User", use: "Y", delYn: "N", isDirty: false, saveFlag: '' },
+    { name: "Peter Jones", role: "Guest", use: "N", delYn: "N", isDirty: false, saveFlag: '' },
   ];
+
+  // searchParams에 useYn이 있으면 필터링을 적용합니다.
+  if (searchParams && searchParams.useYn) {
+    return allData.filter(item => item.use === searchParams.useYn);
+  }
+
+  return allData;
 };
 
 const fetchRoleOptions = async () => {
@@ -41,6 +50,7 @@ const saveGridData = async (changedData) => {
 
 export default function DynamicGrid() {
   const gridRef = useRef();
+  const [searchParams, setSearchParams] = useState(null);
   const { rowData, setRowData, addRow, updateRowData, getChangedRows } =
     useGridStore();
 
@@ -54,10 +64,11 @@ export default function DynamicGrid() {
       setRowData(data || []); // 데이터가 null/undefined일 경우 빈 배열로 설정
     },
   });*/
-  const { isLoading, refetch } = useQuery({
-    queryKey: ["gridData"],
+  const { data, isFetching } = useQuery({
+    queryKey: ["gridData", searchParams],
     queryFn: fetchGridData,
-    enabled: false, // 조회 버튼으로만 동작
+    // searchParams가 null이 아닐 때만 쿼리를 실행합니다. (초기 로딩 방지)
+    enabled: !!searchParams,
   });
 
   // 역할 옵션 로딩 (React Query 사용)
@@ -78,7 +89,13 @@ export default function DynamicGrid() {
       message.error("데이터 저장 중 오류가 발생했습니다.");
     },
   });
-
+  useEffect(() => {
+    // isFetching에서 false로 변경되는 시점에 데이터를 세팅해야
+    // 검색 버튼을 연달아 눌렀을 때 이전 데이터가 잠깐 보이는 현상을 방지할 수 있습니다.
+    if (!isFetching && data) {
+      setRowData(data);
+    }
+  }, [isFetching, data, setRowData]);
   // 컬럼 정의
   const columnDefs = useMemo(
     () => [
@@ -109,6 +126,14 @@ export default function DynamicGrid() {
         editable: true,
         cellRenderer: "agCheckboxCellRenderer",
         cellEditor: "agCheckboxCellEditor",
+        // 'Y'면 true, 아니면 false로 체크박스에 표시
+        valueGetter: (params) => params.data?.use === "Y",
+        // 체크박스 클릭 시 true/false를 'Y'/'N'으로 변환하여 데이터 저장
+        valueSetter: (params) => {
+    const newValue = params.newValue ? "Y" : "N";
+    params.data.use = newValue;
+    return true;
+  },
         width: 150,
       },
        {
@@ -117,6 +142,14 @@ export default function DynamicGrid() {
         editable: true,
         cellRenderer: "agCheckboxCellRenderer",
         cellEditor: "agCheckboxCellEditor",
+        // 'Y'면 true, 아니면 false로 체크박스에 표시
+        valueGetter: (params) => params.data?.delYn === "Y",
+        // 체크박스 클릭 시 true/false를 'Y'/'N'으로 변환하여 데이터 저장
+        valueSetter: (params) => {
+    const newValue = params.newValue ? "Y" : "N";
+    params.data.delYn = newValue;
+    return true;
+  },
         width: 150,
       },
       {
@@ -154,7 +187,7 @@ export default function DynamicGrid() {
 
   // 행 추가 핸들러
   const handleAddRow = () => {
-    const newRow = {  name: "", role: "User", use: false, delYn: false, isDirty : false ,saveFlag: "I" }; // 새로 추가된 행은 saveFlag를 'I'로 설정
+    const newRow = {  name: "", role: "User", use: 'Y', delYn: 'N', isDirty : false ,saveFlag: "I" }; // 새로 추가된 행은 saveFlag를 'I'로 설정
     addRow(newRow);
   };
 
@@ -188,11 +221,8 @@ const handleSaveChanges = () => {
 };
 
   // 조회 핸들러
-  const handleSearch = async () => {
-    const { data } = await refetch();
-    if (data) {
-      setRowData(data); // useEffect 없이 깔끔하게 스토어 반영!
-    }
+  const handleSearch = () => {
+    setSearchParams({ type: ['aa', 'bb', 'cc'], useYn: 'Y' });
   };
 
   const onCellEditRequest = useCallback(
@@ -201,9 +231,14 @@ const handleSaveChanges = () => {
       const { rowIndex } = event.node;
       const colId = event.column.getColId();
 
+      let valueToUpdate = newValue;
+
+      if (colId === "use" || colId === "delYn") {
+        valueToUpdate = newValue ? "Y" : "N";
+      }
       // --- 유효성 검사 로직 추가 ---
       // '이름' 필드에 대한 필수값 검사
-      if (colId === "name" && (!newValue || newValue.trim() === "")) {
+      if (colId === "name" && (!valueToUpdate || valueToUpdate.trim() === "")) {
         // 편집을 강제로 취소하고 이전 값으로 되돌립니다.
         // api.stopEditing(true)는 현재 편집을 취소하는 역할을 합니다.
         // setTimeout을 사용하여 message.error가 표시된 후 비동기적으로 실행되도록 합니다.
@@ -217,7 +252,7 @@ const handleSaveChanges = () => {
       }
 
       // Zustand 스토어를 통해 상태 변경
-      updateRowData(rowIndex, colId, newValue);
+      updateRowData(rowIndex, colId, valueToUpdate);
     },
     [updateRowData]
   );
@@ -225,7 +260,7 @@ const handleSaveChanges = () => {
   return (
     <Card title="사용자 관리" size="small">
       <Space style={{ marginBottom: 16 }}>
-        <Button onClick={handleSearch} loading={isLoading}>
+        <Button onClick={handleSearch} loading={isFetching}>
           조회
         </Button>
         <Button onClick={handleAddRow}>Add Row</Button>
