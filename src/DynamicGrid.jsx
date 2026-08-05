@@ -37,7 +37,12 @@ const fetchRoleOptions = async () => {
   // const { data } = await axios.get("/api/roles");
   await new Promise((resolve) => setTimeout(resolve, 300)); // 로딩 시뮬레이션
   // API에서 받아온 역할 목록이라고 가정합니다.
-  return ["Admin", "User", "Guest", "Moderator"];
+  return [
+    { value: "A", label: "Admin" },
+    { value: "U", label: "User" },
+    { value: "G", label: "Guest" },
+    { value: "M", label: "Moderator" }
+  ];
 };
 
 const saveGridData = async (changedData) => {
@@ -113,10 +118,26 @@ export default function DynamicGrid() {
       {
         field: "role",
         headerName: "역할 (Select)",
-        editable: true,
+         editable: true,
         cellEditor: "agSelectCellEditor",
-        cellEditorParams: {
-          values: roleOptions, // API에서 받아온 데이터 사용
+         cellEditorParams: (params) => {
+          return {
+            values: roleOptions.map(opt => opt.value),
+            formatValue: (value) => {
+              const role = roleOptions.find(opt => opt.value === value);
+              return role ? role.label : value;
+            }
+          };
+        },
+        // value(A, U, G)를 label(Admin, User, Guest)로 변환하여 셀에 표시
+        valueFormatter: (params) => {
+          const role = roleOptions.find((opt) => opt.value === params.value);
+          return role ? role.label : params.value;
+        },
+        // 셀 편집 후 label을 value로 변환하여 데이터 저장
+        valueParser: (params) => {
+          const role = roleOptions.find((opt) => opt.label === params.newValue);
+          return role ? role.value : params.newValue;
         },
         flex: 1,
       },
